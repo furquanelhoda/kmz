@@ -1,141 +1,192 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GAIA-Scout Pro - Archaeological Discovery</title>
+    <title>GAIA-Scout Pro - اكتشاف أثري</title>
+    
+    <!-- Styles & Fonts -->
     <link rel="stylesheet" href="styles.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Leaflet Map -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#00ff88">
+    
+    <!-- Meta -->
+    <meta name="description" content="تطبيق متقدم لاكتشاف الكنوز الأثرية باستخدام الذكاء الاصطناعي والخرائط">
+    <meta name="keywords" content="archaeology, discovery, AI, GPR, mapping">
 </head>
 <body>
-    <div id="app">
+    <!-- Language Selector -->
+    <div class="language-selector">
+        <select id="language-select" onchange="changeLanguage(this.value)">
+            <option value="ar">العربية</option>
+            <option value="fr">Français</option>
+            <option value="en">English</option>
+        </select>
+    </div>
+
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <div class="loading-content">
+            <i class="fas fa-search-location fa-3x"></i>
+            <h2 data-translate="loading">جاري التحميل...</h2>
+            <div class="loading-bar">
+                <div class="loading-progress"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app" style="display: none;">
         <!-- Header -->
         <header class="header">
             <div class="logo">
                 <i class="fas fa-search-location"></i>
-                <span>GAIA-Scout Pro</span>
+                <span data-translate="app_title">GAIA-Scout Pro</span>
             </div>
-            <div class="user-controls">
-                <button class="btn-primary" onclick="toggleAuth()">
-                    <i class="fas fa-user"></i> Login
+            <div class="header-controls">
+                <button class="location-btn" onclick="getExactLocation()" data-translate="locate_me">
+                    <i class="fas fa-crosshairs"></i>
+                </button>
+                <button class="btn-primary" onclick="toggleAuth()" data-translate="login">
+                    <i class="fas fa-user"></i>
                 </button>
             </div>
         </header>
+
+        <!-- Location Status -->
+        <div id="location-status" class="location-status">
+            <i class="fas fa-map-marker-alt"></i>
+            <span data-translate="locating">جاري تحديد الموقع...</span>
+        </div>
 
         <!-- Main Interface -->
         <main class="main-container">
             <!-- Camera Section -->
             <section class="camera-section">
                 <div class="camera-container">
-                    <video id="camera" autoplay playsinline></video>
+                    <video id="camera" autoplay playsinline muted></video>
                     <canvas id="canvas" style="display: none;"></canvas>
                     <div id="detection-overlay"></div>
-                    
-                    <!-- Scanning Indicators -->
-                    <div class="scanning-indicators">
-                        <div class="indicator" id="scan-status">
-                            <i class="fas fa-circle"></i>
-                            <span>Standby</span>
+
+                    <!-- Analysis Results -->
+                    <div class="analysis-overlay">
+                        <div class="analysis-item">
+                            <span data-translate="detected">مكتشف:</span>
+                            <span id="detected-count">0</span>
                         </div>
-                        <div class="indicator" id="depth-indicator">
-                            <span>0.0m depth</span>
+                        <div class="analysis-item">
+                            <span data-translate="confidence">الثقة:</span>
+                            <span id="confidence-display">0%</span>
                         </div>
+                        <div class="analysis-item">
+                            <span data-translate="depth">العمق:</span>
+                            <span id="depth-display">0.0m</span>
+                        </div>
+                    </div>
+
+                    <!-- Upload Section -->
+                    <div class="upload-controls">
+                        <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                        <button onclick="document.getElementById('image-upload').click()" class="upload-btn">
+                            <i class="fas fa-upload"></i>
+                            <span data-translate="upload_image">رفع صورة</span>
+                        </button>
                     </div>
                 </div>
             </section>
 
             <!-- Controls Panel -->
             <section class="controls-panel">
-                <div class="gpr-controls">
-                    <h3><i class="fas fa-layer-group"></i> GPR Controls</h3>
-                    
-                    <!-- Depth Slider -->
+                <!-- GPR Controls -->
+                <div class="control-card">
+                    <h3><i class="fas fa-layer-group"></i> <span data-translate="gpr_controls">ضوابط GPR</span></h3>
                     <div class="slider-container">
-                        <label>Depth: <span id="depth-value">0.5m</span></label>
+                        <label><span data-translate="depth">العمق</span>: <span id="depth-value">0.5m</span></label>
                         <input type="range" id="depth-slider" min="0" max="5" step="0.1" value="0.5">
                     </div>
-                    
-                    <!-- Depth Layers -->
-                    <div class="depth-layers">
-                        <button class="layer-btn active" data-depth="0.5">Shallow (0-0.5m)</button>
-                        <button class="layer-btn" data-depth="2.0">Medium (0.5-2m)</button>
-                        <button class="layer-btn" data-depth="5.0">Deep (2-5m)</button>
-                    </div>
-                    
-                    <!-- Color Legend -->
-                    <div class="legend">
-                        <h4>Density Legend</h4>
-                        <div class="legend-items">
-                            <div class="legend-item">
-                                <div class="color-box" style="background: #87CEEB;"></div>
-                                <span>Natural Soil</span>
-                            </div>
-                            <div class="legend-item">
-                                <div class="color-box" style="background: #FF6347;"></div>
-                                <span>High Density</span>
-                            </div>
-                            <div class="legend-item">
-                                <div class="color-box" style="background: #000000;"></div>
-                                <span>Void/Cavity</span>
-                            </div>
-                        </div>
+                    <div class="depth-buttons">
+                        <button class="depth-btn active" data-depth="0.5" data-translate="shallow">سطحي</button>
+                        <button class="depth-btn" data-depth="2" data-translate="medium">متوسط</button>
+                        <button class="depth-btn" data-depth="5" data-translate="deep">عميق</button>
                     </div>
                 </div>
 
                 <!-- Map Section -->
-                <div class="map-section">
-                    <h3><i class="fas fa-map"></i> Topographic Map</h3>
+                <div class="control-card">
+                    <h3><i class="fas fa-map"></i> <span data-translate="map">الخريطة</span></h3>
                     <div id="map"></div>
-                    <input type="file" id="kmz-upload" accept=".kmz,.kml" style="display: none;">
-                    <button onclick="document.getElementById('kmz-upload').click()" class="btn-secondary">
-                        <i class="fas fa-upload"></i> Import KMZ
-                    </button>
+                    <div class="map-controls">
+                        <button onclick="syncLocationWithMap()" class="btn-primary">
+                            <i class="fas fa-sync"></i> <span data-translate="sync_location">مزامنة الموقع</span>
+                        </button>
+                        <input type="file" id="kmz-upload" accept=".kmz,.kml" style="display: none;">
+                        <button onclick="document.getElementById('kmz-upload').click()" class="btn-secondary">
+                            <i class="fas fa-upload"></i> KMZ
+                        </button>
+                    </div>
                 </div>
-            </section>
 
-            <!-- Discovery List -->
-            <section class="discoveries-section">
-                <h3><i class="fas fa-history"></i> Recent Discoveries</h3>
-                <div id="discoveries-list">
-                    <div class="discovery-item">
-                        <div class="discovery-icon">🏺</div>
-                        <div class="discovery-info">
-                            <h4>Pottery Shard</h4>
-                            <p>Depth: 1.2m • Confidence: 87%</p>
+                <!-- Professional Analysis -->
+                <div class="control-card">
+                    <h3><i class="fas fa-microscope"></i> <span data-translate="analysis">التحليل</span></h3>
+                    <div class="analysis-results">
+                        <div class="result-item">
+                            <span data-translate="soil_type">نوع التربة:</span>
+                            <span id="soil-type">-</span>
+                        </div>
+                        <div class="result-item">
+                            <span data-translate="probability">الاحتمالية:</span>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="probability-bar"></div>
+                            </div>
+                        </div>
+                        <div class="result-item">
+                            <span data-translate="period">الفترة:</span>
+                            <span id="historical-period">-</span>
                         </div>
                     </div>
+                </div>
+
+                <!-- Recent Discoveries -->
+                <div class="control-card">
+                    <h3><i class="fas fa-history"></i> <span data-translate="discoveries">الاكتشافات</span></h3>
+                    <div id="discoveries-list"></div>
                 </div>
             </section>
         </main>
 
-        <!-- AI Processing Modal -->
-        <div id="ai-modal" class="modal" style="display: none;">
-            <div class="modal-content">
-                <h3>AI Analysis in Progress...</h3>
-                <div class="progress-bar">
-                    <div class="progress-fill"></div>
-                </div>
-                <p id="ai-status">Detecting archaeological features...</p>
-            </div>
-        </div>
-
-        <!-- Authentication Modal -->
-        <div id="auth-modal" class="modal" style="display: none;">
+        <!-- Modals -->
+        <div id="auth-modal" class="modal">
             <div class="modal-content">
                 <span class="close" onclick="toggleAuth()">&times;</span>
-                <h3>Sign In</h3>
+                <h3 data-translate="login">تسجيل الدخول</h3>
                 <form id="auth-form">
                     <input type="email" placeholder="Email" required>
                     <input type="password" placeholder="Password" required>
-                    <button type="submit" class="btn-primary">Sign In</button>
+                    <button type="submit" class="btn-primary" data-translate="sign_in">دخول</button>
                 </form>
+            </div>
+        </div>
+
+        <!-- Analysis Modal -->
+        <div id="analysis-modal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeAnalysisModal()">&times;</span>
+                <h3 data-translate="detailed_report">تقرير تفصيلي</h3>
+                <div id="detailed-results"></div>
             </div>
         </div>
     </div>
 
+    <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="translations.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
